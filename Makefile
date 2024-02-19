@@ -1,13 +1,28 @@
+# Compiler to use
 CXX = g++
-FLAGS = -g -W -Wall -Wextra -Wpedantic -Werror -std=c++11
-LIBRARIES = -lpthread
 
-.PHONY: default run
+# Compiler flags
+CXXFLAGS = -std=c++11 -Wall -g
 
-default: run
+# Target executable name
+TARGET = program
 
-run:
-	${CXX} ${FLAGS} *.cpp ${LIBRARIES} -o program
+# Source files
+SRCS = main.cpp process.cpp processMgmt.cpp
 
+# Object files
+OBJS = $(SRCS:.cpp=.o)
+
+# Rule for making the target
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
+
+# Rule for cleaning the project
 clean:
-	-@rm -rf *.o program core
+	rm -f $(OBJS) $(TARGET)
+
+# Rule for compiling source files to object files
+.cpp.o:
+	$(CXX) $(CXXFLAGS) -c $< -o $@

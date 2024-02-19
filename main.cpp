@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
     // vector of processes, processes will appear here when they are created by
     // the ProcessMgmt object (in other words, automatically at the appropriate time)
     list<Process> processList;
-    
+
     // this will orchestrate process creation in our system, it will add processes to 
     // processList when they are created and ready to be run/managed
     ProcessManagement processMgmt(processList);
@@ -60,7 +60,18 @@ int main(int argc, char* argv[])
 //    processorAvailable = true;
 
     //keep running the loop until all processes have been added and have run to completion
-    while(processMgmt.moreProcessesComing()  /* TODO add something to keep going as long as there are processes that arent done! */ )
+  
+  // Function to check if any process is not done
+  auto anyProcessNotDone = [&processList]() -> bool {
+      for (const Process& proc : processList) {
+          if (proc.state != done) {
+              return true;
+          }
+      }
+      return false;
+  };
+  
+    while(processMgmt.moreProcessesComing() || anyProcessNotDone()  /* TODO add something to keep going as long as there are processes that arent done! */ )
     {
         //Update our current time step
         ++time;
@@ -77,12 +88,14 @@ int main(int argc, char* argv[])
         // - admit a new process if one is ready (i.e., take a 'newArrival' process and put them in the 'ready' state)
         // - address an interrupt if there are any pending (i.e., update the state of a blocked process whose IO operation is complete)
         // - start processing a ready process if there are any ready
+      
+
 
 
         //init the stepAction, update below
         stepAction = noAct;
 
-        
+
         //TODO add in the code to take an appropriate action for this time step!
         //you should set the action variable based on what you do this time step. you can just copy and paste the lines below and uncomment them, if you want.
         //stepAction = continueRun;  //runnning process is still running
@@ -91,10 +104,69 @@ int main(int argc, char* argv[])
         //stepAction = admitNewProc;   //admit a new process into 'ready'
         //stepAction = handleInterrupt;   //handle an interrupt
         //stepAction = beginRun;   //start running a process
- 
-        
 
-        //   <your code here> 
+
+
+        // Check if a process is currently running
+        for (Process& proc : processList) {
+            if (proc.state == processing) {
+                // Update process time
+                proc.processorTime++;
+
+                // Check for I/O request or completion
+                if (!proc.ioEvents.empty() && proc.ioEvents.front().time == proc.processorTime) {
+                    // Issue I/O request and block the process
+                    ioModule.submitIORequest(time, proc.ioEvents.front(), proc);
+                    proc.state = blocked;
+                    proc.ioEvents.pop_front();  // Assuming this is the correct method to remove the event
+                    stepAction = ioRequest;
+                } else if (proc.processorTime == proc.reqProcessorTime) {
+                    // Process is complete
+                    proc.state = done;
+                    stepAction = complete;
+                } else {
+                    // Process continues running
+                    stepAction = continueRun;
+                }
+                break;
+            }
+        }
+
+        // Check for new process admission
+        if (stepAction == noAct) {
+            for (Process& proc : processList) {
+                if (proc.state == newArrival) {
+                    proc.state = ready;
+                    stepAction = admitNewProc;
+                    break;
+                }
+            }
+        }
+
+        // Handle I/O interrupts
+        if (stepAction == noAct && !interrupts.empty()) {
+            IOInterrupt interrupt = interrupts.front();
+            // Find the corresponding process and update it
+            auto it = find_if(processList.begin(), processList.end(), [&interrupt](const Process& p) {
+                return p.id == interrupt.procID;
+            });
+            if (it != processList.end()) {
+                it->state = ready;
+                interrupts.pop_front();  // Assuming this is the correct method to remove the interrupt
+                stepAction = handleInterrupt;
+            }
+        }
+
+        // Start a ready process
+        if (stepAction == noAct) {
+            for (Process& proc : processList) {
+                if (proc.state == ready) {
+                    proc.state = processing;
+                    stepAction = beginRun;
+                    break;
+                }
+            }
+        }
 
 
 
@@ -103,7 +175,7 @@ int main(int argc, char* argv[])
 
         // Leave the below alone (at least for final submission, we are counting on the output being in expected format)
         cout << setw(5) << time << "\t"; 
-        
+
         switch(stepAction)
         {
             case admitNewProc:
